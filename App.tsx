@@ -1,5 +1,6 @@
+
 import React, { useState, useEffect } from 'react';
-import { searchChargingStations } from './services/geminiService';
+import { searchChargingStations, getFeaturedStations } from './services/geminiService';
 import { ChargingStation, SearchResult } from './types';
 import Header from './components/Header';
 import StationCard from './components/StationCard';
@@ -14,8 +15,8 @@ const App: React.FC = () => {
   const [query, setQuery] = useState('');
   const [loading, setLoading] = useState(false);
   const [results, setResults] = useState<SearchResult | null>(null);
-  const [userLocation, setUserLocation] = useState<{ latitude: number; longitude: number } | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [featured] = useState<ChargingStation[]>(getFeaturedStations());
 
   const ADSENSE_CONFIG = {
     publisherId: "ca-pub-8240089325914529", 
@@ -26,15 +27,6 @@ const App: React.FC = () => {
     }
   };
 
-  useEffect(() => {
-    if (navigator.geolocation) {
-      navigator.geolocation.getCurrentPosition(
-        (pos) => setUserLocation({ latitude: pos.coords.latitude, longitude: pos.coords.longitude }),
-        (err) => console.warn("Location permission required for optimal routing.", err)
-      );
-    }
-  }, []);
-
   const handleSearch = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
     if (!query.trim()) return;
@@ -43,13 +35,13 @@ const App: React.FC = () => {
     setError(null);
     setView('home');
     try {
-      const data = await searchChargingStations(query, userLocation || undefined);
+      const data = await searchChargingStations(query);
       setResults(data);
       setTimeout(() => {
         document.getElementById('grid-view')?.scrollIntoView({ behavior: 'smooth' });
       }, 100);
     } catch (err) {
-      setError("Grid connection failure. Please verify network status.");
+      setError("Local grid synchronization error.");
     } finally {
       setLoading(false);
     }
@@ -122,44 +114,33 @@ const App: React.FC = () => {
                   </div>
                 )}
 
-                {results && !loading && (
+                {(results || featured) && !loading && (
                   <div className="space-y-12 animate-fade-in">
                     <div className="flex items-center gap-6">
                       <div className="h-12 w-1.5 bg-blue-600 rounded-full"></div>
-                      <h2 className="text-4xl font-black tracking-tight">Active Nodes</h2>
-                      <span className="ml-auto text-xs font-black text-slate-600 uppercase tracking-widest">{results.stations.length} Points Found</span>
+                      <h2 className="text-4xl font-black tracking-tight">{results ? 'Search Results' : 'Featured Nodes'}</h2>
+                      <span className="ml-auto text-xs font-black text-slate-600 uppercase tracking-widest">
+                        {results ? results.stations.length : featured.length} Points Found
+                      </span>
                     </div>
 
-                    <div className="bg-slate-900/40 border border-white/5 p-8 rounded-[2.5rem] backdrop-blur-md relative overflow-hidden group">
-                       <div className="absolute top-0 right-0 p-4 opacity-20"><i className="fas fa-brain text-4xl text-blue-500"></i></div>
-                       <p className="text-slate-300 text-xl leading-relaxed italic font-medium">
-                         "{results.text}"
-                       </p>
-                    </div>
+                    {results && (
+                      <div className="bg-slate-900/40 border border-white/5 p-8 rounded-[2.5rem] backdrop-blur-md relative overflow-hidden group">
+                        <div className="absolute top-0 right-0 p-4 opacity-20"><i className="fas fa-shield-halved text-4xl text-blue-500"></i></div>
+                        <p className="text-slate-300 text-xl leading-relaxed italic font-medium">
+                          "{results.text}"
+                        </p>
+                      </div>
+                    )}
 
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                      {results.stations.map(station => <StationCard key={station.id} station={station} />)}
+                      {(results ? results.stations : featured).map(station => (
+                        <StationCard key={station.id} station={station} />
+                      ))}
                     </div>
                   </div>
                 )}
 
-                {!results && !loading && (
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                    {[
-                      { icon: 'bolt-lightning', title: 'High-Voltage Focus', desc: 'Exclusively listing Tier-1 infrastructure with 120kW+ liquid-cooled capacity.' },
-                      { icon: 'shield-check', title: 'Verified Uptime', desc: 'Real-time telemetry ensures the station is functional before you arrive.' }
-                    ].map((item, i) => (
-                      <div key={i} className="glass-morphism rounded-[2.5rem] p-10 group hover:border-blue-500/20 transition-all">
-                        <div className="w-16 h-16 bg-blue-600/10 rounded-2xl flex items-center justify-center mb-8 group-hover:scale-110 transition-transform">
-                          <i className={`fas fa-${item.icon} text-blue-500 text-2xl`}></i>
-                        </div>
-                        <h3 className="text-2xl font-bold mb-4">{item.title}</h3>
-                        <p className="text-slate-500 font-medium leading-relaxed">{item.desc}</p>
-                      </div>
-                    ))}
-                  </div>
-                )}
-                
                 <AdBanner type="rectangle" publisherId={ADSENSE_CONFIG.publisherId} adSlot={ADSENSE_CONFIG.slots.midContent} />
               </div>
 
@@ -196,7 +177,7 @@ const App: React.FC = () => {
 
                     <div className="pt-6 border-t border-white/5">
                       <p className="text-slate-600 text-[10px] font-bold leading-relaxed uppercase tracking-wider">
-                        The evec.in network utilizes advanced AI routing to prevent grid congestion across the subcontinent.
+                        The evec.in network utilizes advanced proprietary routing to prevent grid congestion across the subcontinent.
                       </p>
                     </div>
                   </div>
